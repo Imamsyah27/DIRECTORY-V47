@@ -1,0 +1,73 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LayoutDashboard, Package, ShoppingBag, Archive, Repeat2, ChartNoAxesCombined, Bot, Search, Bell, Sun, Moon, LogOut, RefreshCw, ArrowUpRight, CircleCheck, Clock3, AlertTriangle, CalendarDays, ChevronRight, Menu, X, Headset, ShieldCheck, Sparkles, ExternalLink } from 'lucide-react';
+import './styles.css';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://drryamosodluupxbbtee.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRycnlhbW9zb2RsdXVweGJidGVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzEwMTgsImV4cCI6MjA5ODgwNzAxOH0.q_Dq4w3Ugv7rCq3NeEXSIYEuNCbsG19Ghsj2vo0_TOc';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const legacyUrl = '../pelanggan/dashboard.html';
+const navItems = [
+  {id:'home',label:'Beranda',icon:LayoutDashboard},
+  {id:'bot',label:'Bot Order',icon:Bot},
+  {id:'catalog',label:'Katalog',icon:ShoppingBag},
+  {id:'supply',label:'Supply & Stock',icon:Package},
+  {id:'archive',label:'Arsip Saya',icon:Archive},
+  {id:'renew',label:'Perpanjangan',icon:Repeat2},
+  {id:'charts',label:'Grafik',icon:ChartNoAxesCombined},
+];
+const todayUTC = () => new Date().toISOString().slice(0,10);
+function reached(o){return Number(o.paket_total||0)>0 && Number(o.paket_terkirim||0)>=Number(o.paket_total||0)}
+function tomorrow(o){if(reached(o))return false;const left=Number(o.paket_total||0)-Number(o.paket_terkirim||0);return ((o.last_check_utc===todayUTC())?left:left-1)===1}
+function status(o){const total=Number(o.paket_total||0),sent=Number(o.paket_terkirim||0);if(total>0&&sent>=total)return {label:'Limit tercapai',tone:'complete',icon:CircleCheck};if(total>0&&sent/total>=.8)return {label:'Hampir limit',tone:'warning',icon:AlertTriangle};return {label:'Berjalan',tone:'active',icon:Clock3}}
+function fmtDate(v){if(!v)return '—';try{return new Date(v).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'})}catch{return v}}
+function App(){
+ const [orders,setOrders]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[active,setActive]=useState('home'),[dark,setDark]=useState(true),[mobileOpen,setMobileOpen]=useState(false),[lastUpdated,setLastUpdated]=useState(new Date()),[toast,setToast]=useState('');
+ const username=localStorage.getItem('pelanggan_username')||sessionStorage.getItem('admin_view_name')||'Pelanggan';
+ const token=sessionStorage.getItem('admin_view_token')||localStorage.getItem('pelanggan_session_token');
+ async function load(){setLoading(true);setError('');if(!token){window.location.href='../pelanggan/index.html';return}
+   const {data,error}=await supabase.rpc('get_my_orders',{p_session_token:token});
+   if(error){setError(error.message||'Data belum dapat dimuat.');setOrders([])}else{setOrders(data||[]);setLastUpdated(new Date())}
+   setLoading(false);
+ }
+ useEffect(()=>{load()},[]);
+ const live=orders.filter(o=>!o.hold), held=orders.filter(o=>o.hold), limited=live.filter(reached), due=live.filter(tomorrow);
+ const filtered=useMemo(()=>{let arr=filter==='limit'?limited:filter==='tomorrow'?due:filter==='hold'?held:live;const q=query.toLowerCase().replaceAll('#','').trim();return arr.filter(o=>!q||String(o.tagar||'').toLowerCase().replaceAll('#','').includes(q))},[orders,filter,query]);
+ const totalDays=live.reduce((a,o)=>a+Number(o.paket_total||0),0),sentDays=live.reduce((a,o)=>a+Math.min(Number(o.paket_terkirim||0),Number(o.paket_total||0)),0);
+ const pct=totalDays?Math.round(sentDays/totalDays*100):0;
+ function logout(){if(window.confirm('Keluar dari portal pelanggan?')){if(token) supabase.rpc('customer_logout',{p_session_token:token});localStorage.removeItem('pelanggan_session_token');localStorage.removeItem('pelanggan_username');window.location.href='../pelanggan/index.html'}}
+ function nav(item){if(item==='home'){setActive('home');setMobileOpen(false);return}window.location.href=legacyUrl+'#tab='+item}
+ function notify(msg){setToast(msg);setTimeout(()=>setToast(''),2800)}
+ return <div className={`app ${dark?'dark':'light'}`}>
+  <AnimatePresence>{mobileOpen&&<motion.button className="scrim" aria-label="Tutup menu" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={()=>setMobileOpen(false)}/>}</AnimatePresence>
+  <aside className={`sidebar ${mobileOpen?'open':''}`}>
+   <div className="brand"><div className="brand-mark"><Sparkles size={19}/></div><div><strong>DIRECTORY<span>.</span></strong><small>Customer portal</small></div><button className="icon-btn mobile-close" onClick={()=>setMobileOpen(false)}><X size={18}/></button></div>
+   <div className="workspace"><div className="workspace-avatar">D</div><div><b>Dashboard Pelanggan</b><small>Personal workspace</small></div><ChevronRight size={15}/></div>
+   <div className="nav-caption">MENU UTAMA</div>
+   <nav className="side-nav">{navItems.map((item,i)=>{const Icon=item.icon;return <button key={item.id} onClick={()=>nav(item.id)} className={`nav-item ${active===item.id?'selected':''}`}><Icon size={18}/><span>{item.label}</span>{item.id==='renew'&&<span className="nav-dot"/>}{active===item.id&&<motion.div layoutId="nav-active" className="nav-active"/>}</button>})}</nav>
+   <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><Headset size={18}/></div><b>Butuh bantuan?</b><p>Tim kami siap membantu Anda.</p><a href={`https://wa.me/${'6285269368022'}`} onClick={e=>{e.preventDefault();notify('Silakan gunakan tombol Hubungi Admin di bagian atas.')}}>Hubungi support <ArrowUpRight size={14}/></a></div><button className="nav-item logout" onClick={logout}><LogOut size={18}/><span>Keluar akun</span></button><div className="user-row"><div className="user-avatar">{username.slice(0,1).toUpperCase()}</div><div className="user-meta"><b>{username}</b><small>Akun pelanggan</small></div><ShieldCheck size={17} className="verified"/></div></div>
+  </aside>
+  <main className="main">
+   <header className="topbar"><div className="topbar-left"><button className="icon-btn mobile-menu" onClick={()=>setMobileOpen(true)}><Menu size={20}/></button><div className="breadcrumb">Portal <ChevronRight size={14}/><b>{navItems.find(n=>n.id===active)?.label||'Beranda'}</b></div></div><div className="top-actions"><span className="secure-label"><span/> Sistem aman</span><button className="icon-btn" aria-label="Ganti tema" onClick={()=>setDark(!dark)}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-btn notification" aria-label="Notifikasi" onClick={()=>notify('Anda sudah melihat pembaruan terbaru.')}><Bell size={18}/></button><div className="top-avatar">{username.slice(0,1).toUpperCase()}</div></div></header>
+   <div className="content">
+    <motion.section className="welcome-row" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:.45}}><div><div className="eyebrow"><span className="eyebrow-dot"/> RINGKASAN AKUN</div><h1>Selamat datang, {username} <span className="wave">✦</span></h1><p>Semua progres langganan Anda, dalam satu tampilan.</p></div><div className="welcome-actions"><button className="btn secondary" onClick={()=>window.location.href=legacyUrl}><ExternalLink size={16}/> Portal lengkap</button><button className="btn primary" onClick={load}><RefreshCw size={16} className={loading?'spin':''}/> Perbarui data</button></div></motion.section>
+    <motion.section className="hero-card" initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{delay:.08,duration:.5}}><div className="hero-copy"><div className="hero-label"><Sparkles size={15}/> RINGKASAN LANGGANAN</div><h2>Terus pantau.<br/><span>Tetap terkendali.</span></h2><p>Pantau pengiriman harian dan ketahui langganan yang perlu perhatian lebih awal.</p><div className="hero-progress"><div className="progress-copy"><span>Progres keseluruhan</span><b>{pct}%</b></div><div className="progress-track"><motion.div className="progress-fill" initial={{width:0}} animate={{width:`${pct}%`}} transition={{duration:.8,delay:.25}}/></div><small>{sentDays.toLocaleString('id-ID')} dari {totalDays.toLocaleString('id-ID')} hari paket tercatat</small></div></div><div className="hero-visual"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="hero-orb"><div className="orb-inner"><ChartNoAxesCombined size={39}/></div></div><div className="float-chip chip-top"><span className="mini-check"><CircleCheck size={14}/></span><div><b>{live.length} langganan</b><small>terpantau</small></div></div><div className="float-chip chip-bottom"><span className="mini-spark"><Sparkles size={14}/></span><div><b>{limited.length} limit</b><small>perlu diperbarui</small></div></div></div><div className="hero-glow"/></motion.section>
+    <section className="section-heading"><div><h2>Ikhtisar langganan</h2><p>Statistik utama akun Anda saat ini.</p></div><div className="updated"><span className="live-dot"/> Diperbarui {lastUpdated.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</div></section>
+    <div className="stats-grid">
+      {[{label:'Langganan aktif',value:live.length,desc:'Sedang berjalan',icon:Package,tone:'blue',filter:'all'},{label:'Limit tercapai',value:limited.length,desc:'Perlu perpanjangan',icon:CircleCheck,tone:'green',filter:'limit'},{label:'Limit besok',value:due.length,desc:'Segera perlu perhatian',icon:CalendarDays,tone:'amber',filter:'tomorrow'},{label:'Langganan ditunda',value:held.length,desc:'Berstatus ditunda',icon:Clock3,tone:'violet',filter:'hold'}].map((s,i)=>{const Icon=s.icon;return <motion.button key={s.label} className={`stat-card ${filter===s.filter?'stat-selected':''}`} onClick={()=>setFilter(filter===s.filter&&s.filter!=='all'?'all':s.filter)} initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{delay:.12+i*.06,duration:.4}} whileHover={{y:-3}}><div className="stat-top"><span>{s.label}</span><span className={`stat-icon ${s.tone}`}><Icon size={18}/></span></div><div className="stat-value">{loading?<span className="skeleton-number"/>:s.value}</div><div className="stat-foot"><span className={`status-bullet ${s.tone}`}/>{s.desc}<ArrowUpRight size={14} className="stat-arrow"/></div></motion.button>})}
+    </div>
+    <section className="orders-panel"><div className="panel-heading"><div><h2>Detail langganan</h2><p>Kelola pemantauan tagar dan status pengiriman.</p></div><div className="view-count"><span>{filtered.length}</span> data</div></div>
+     <div className="table-controls"><div className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Cari tagar langganan..." aria-label="Cari tagar langganan"/>{query&&<button onClick={()=>setQuery('')} aria-label="Hapus pencarian"><X size={15}/></button>}</div><div className="filter-group">{[{id:'all',label:'Semua'},{id:'limit',label:'Limit'},{id:'tomorrow',label:'Limit besok'},{id:'hold',label:'Ditunda'}].map(f=><button key={f.id} className={filter===f.id?'filter-on':''} onClick={()=>setFilter(f.id)}>{f.label}{f.id==='all'&&<span>{live.length}</span>}</button>)}</div></div>
+     {error&&<div className="error-state"><AlertTriangle size={19}/><div><b>Data belum dapat dimuat</b><p>{error.includes('YOUR_SUPABASE')?'Konfigurasi Supabase belum lengkap. Atur VITE_SUPABASE_ANON_KEY atau gunakan file config portal yang sudah ada.':error}</p><button className="btn secondary" onClick={load}>Coba lagi</button></div></div>}
+     {loading?<div className="loading-list">{[1,2,3].map(n=><div className="loading-row" key={n}><div className="skeleton circle"/><div className="skeleton lines"/><div className="skeleton bar"/></div>)}</div>:!error&&filtered.length===0?<div className="empty-state"><div className="empty-icon"><Search size={23}/></div><b>{query?'Tagar tidak ditemukan':'Belum ada langganan di kategori ini'}</b><p>{query?'Coba kata kunci lain atau hapus tanda #.':'Data akan muncul di sini setelah tersedia.'}</p><button className="btn secondary" onClick={()=>{setFilter('all');setQuery('')}}>Tampilkan semua</button></div>:!error&&<div className="table-wrap"><table><thead><tr><th>TAGAR / LABEL</th><th>DASHBOARD</th><th>PROGRES PAKET</th><th>PEMBARUAN TERAKHIR</th><th>STATUS</th><th/></tr></thead><tbody>{filtered.map((o,i)=>{const st=status(o),Icon=st.icon,total=Number(o.paket_total||0),sent=Number(o.paket_terkirim||0),percent=total?Math.min(100,Math.round(sent/total*100)):0;return <motion.tr key={o.id||o.tagar||i} initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} transition={{delay:Math.min(i*.025,.2)}}><td><div className="tag-cell"><div className="tag-avatar">{String(o.tagar||'#').replace('#','').slice(0,1).toUpperCase()}</div><div><b>{o.tagar||'Tanpa tagar'}</b>{o.inisial&&<small>{o.inisial}</small>}</div></div></td><td><span className="dashboard-pill">{o.dashboard||o.sumber||'Langganan'}</span></td><td><div className="progress-cell"><div className="progress-label"><b>{sent.toLocaleString('id-ID')} / {total.toLocaleString('id-ID')} hari</b><span>{percent}%</span></div><div className="tiny-track"><span style={{width:`${percent}%`}} className={st.tone}/></div></div></td><td><span className="date-text">{fmtDate(o.last_check_utc)}</span></td><td><span className={`status-pill ${st.tone}`}><Icon size={14}/>{st.label}</span></td><td><button className="row-action" aria-label={`Lihat ${o.tagar||'langganan'}`} onClick={()=>notify(`${o.tagar||'Langganan'} · ${sent} dari ${total} hari tercatat`)}><ChevronRight size={17}/></button></td></motion.tr>})}</tbody></table></div>}
+     <div className="panel-footer"><span>Menampilkan <b>{filtered.length}</b> dari <b>{orders.length}</b> langganan</span><span className="footer-note"><ShieldCheck size={14}/> Data akun Anda terlindungi</span></div>
+    </section>
+    <footer className="footer"><span>© {new Date().getFullYear()} DIRECTORY Portal Pelanggan</span><div><button onClick={()=>window.location.href=legacyUrl}>Fitur lengkap <ArrowUpRight size={13}/></button><span className="footer-separator"/> <span>Dirancang untuk kemudahan Anda</span></div></footer>
+   </div>
+  </main>
+  <AnimatePresence>{toast&&<motion.div className="toast" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}><CircleCheck size={17}/>{toast}</motion.div>}</AnimatePresence>
+ </div>
+}
+createRoot(document.getElementById('root')).render(<App/>);
