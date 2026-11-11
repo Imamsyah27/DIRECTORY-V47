@@ -2,7 +2,8 @@ name: Build and deploy DIRECTORY-V8 to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "DIRECTORY-V8-GitHub-Pages-Bundle.zip"
       - ".github/workflows/deploy.yml"
@@ -14,7 +15,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: true
 
 jobs:
@@ -30,16 +31,48 @@ jobs:
           node-version: 20
 
       - name: Extract website bundle
-        run: | unzip -q DIRECTORY-V8-GitHub-Pages-Bundle.zip -d source test -f source/pelanggan-react/package.json test -d source/pelanggan 
+        run: |
+          test -f DIRECTORY-V8-GitHub-Pages-Bundle.zip
+          mkdir -p source
+          unzip -q DIRECTORY-V8-GitHub-Pages-Bundle.zip -d source
+          test -f source/pelanggan-react/package.json
+          test -d source/pelanggan
+          test -f source/index.html
+
       - name: Build React dashboard
         working-directory: source/pelanggan-react
         env:
           REPO_NAME: ${{ github.event.repository.name }}
-        run: | npm install npm run build -- --base="/${REPO_NAME}/pelanggan-react/" 
+        run: |
+          npm install
+          npm run build -- --base="/${REPO_NAME}/pelanggan-react/"
+
       - name: Assemble GitHub Pages site
-        env:
-          REPO_NAME: ${{ github.event.repository.name }}
-        run: | mkdir -p _site cp -R source/index.html source/*.css source/*.js source/js source/pelanggan _site/ mkdir -p _site/pelanggan-react cp -R source/pelanggan-react/dist/. _site/pelanggan-react/ cat > _site/index.html <<EOF <!doctype html> <html lang="id"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1"> <meta http-equiv="refresh" content="0;url=./pelanggan-react/"> <title>DIRECTORY Customer Portal</title> </head> <body> <p>Membuka Dashboard Pelanggan… <a href="./pelanggan-react/">Lanjutkan</a></p> </body> </html> EOF touch _site/.nojekyll 
+        run: |
+          mkdir -p _site
+          cp source/index.html _site/
+          cp source/*.css _site/
+          cp source/*.js _site/
+          cp -R source/js _site/
+          cp -R source/pelanggan _site/
+          mkdir -p _site/pelanggan-react
+          cp -R source/pelanggan-react/dist/. _site/pelanggan-react/
+          cat > _site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="id">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta http-equiv="refresh" content="0;url=./pelanggan-react/">
+            <title>DIRECTORY Customer Portal</title>
+          </head>
+          <body>
+            <p>Membuka Dashboard Pelanggan… <a href="./pelanggan-react/">Lanjutkan</a></p>
+          </body>
+          </html>
+          EOF
+          touch _site/.nojekyll
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
